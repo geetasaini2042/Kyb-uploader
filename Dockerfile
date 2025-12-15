@@ -1,25 +1,23 @@
-# Python 3.10 use kar rahe hain
-FROM python:3.10-slim
+# Hum naya 'Bookworm' version use karenge jo stable hai
+FROM python:3.10-slim-bookworm
 
-# Working directory set karein
+# Working directory set karna
 WORKDIR /app
 
-# System updates aur FFmpeg install karein
-RUN apt-get update -y && \
+# System updates aur FFmpeg install karna
+RUN apt-get update && \
     apt-get install -y ffmpeg git && \
     rm -rf /var/lib/apt/lists/*
 
-# Pip ko upgrade karein
+# Pip upgrade karna (Optional but recommended)
 RUN pip install --upgrade pip
 
-# Pehle sirf requirements copy karein (Cache ke liye acha hai)
+# Requirements file copy aur install karna
 COPY requirements.txt .
-
-# Requirements install karein
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Baaki code copy karein
+# Baaki saari files copy karna
 COPY . .
 
-# Bot run karein
+# Bot start karna
 CMD ["python", "bot.py"]
