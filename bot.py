@@ -62,8 +62,12 @@ if not os.path.exists(DOWNLOAD_DIR): os.makedirs(DOWNLOAD_DIR)
 
 # --- INIT JSON ---
 def init_json():
-    if not os.path.exists(LOG_FILE): with open(LOG_FILE, 'w') as f: json.dump({}, f)
-    if not os.path.exists(CACHE_FILE): with open(CACHE_FILE, 'w') as f: json.dump({}, f)
+    if not os.path.exists(LOG_FILE):
+        with open(LOG_FILE, 'w') as f:
+            json.dump({}, f)
+    if not os.path.exists(CACHE_FILE):
+        with open(CACHE_FILE, 'w') as f:
+            json.dump({}, f)
 init_json()
 
 # --- GLOBALS ---
