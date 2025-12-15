@@ -1,0 +1,9 @@
+Pyrogram
+TgCrypto
+aiohttp
+aiofiles
+Flask
+yt-dlp
+pycryptodome
+python-dotenv
+
