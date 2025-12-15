@@ -1,23 +1,25 @@
-# Python ka lightweight version base image ke liye
-FROM python:3.10-slim-buster
+# Python 3.10 use kar rahe hain
+FROM python:3.10-slim
 
-# 1. System Update aur FFmpeg Install karna
-# (git bhi add kiya hai taaki yt-dlp update ho sake agar zaroorat ho)
-RUN apt-get update && \
+# Working directory set karein
+WORKDIR /app
+
+# System updates aur FFmpeg install karein
+RUN apt-get update -y && \
     apt-get install -y ffmpeg git && \
     rm -rf /var/lib/apt/lists/*
 
-# 2. Working Directory set karna
-WORKDIR /app
+# Pip ko upgrade karein
+RUN pip install --upgrade pip
 
-# 3. Requirements copy karke install karna
+# Pehle sirf requirements copy karein (Cache ke liye acha hai)
 COPY requirements.txt .
+
+# Requirements install karein
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 4. Saara code copy karna
+# Baaki code copy karein
 COPY . .
 
-# 5. Bot start karna
-# (Make sure aapki main file ka naam bot.py hi ho, nahi to ise change karein)
+# Bot run karein
 CMD ["python", "bot.py"]
-
