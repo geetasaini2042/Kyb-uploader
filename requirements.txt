@@ -7,3 +7,4 @@ yt-dlp
 pycryptodome
 python-dotenv
 flask_cors
+jwt
