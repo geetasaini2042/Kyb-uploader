@@ -199,13 +199,14 @@ import urllib.parse
 import time
 import json
 
-def verify_telegram_data(init_data, bot_token):
+def verify_telegram_data(init_data):
     """
     Validates Telegram Web App data.
     Input:
         init_data: The raw query string from window.Telegram.WebApp.initData
         bot_token: Your Telegram Bot Token
     """
+    bot_token = BOT_TOKEN 
     if not init_data:
         print("Error: init_data is empty")
         return False
