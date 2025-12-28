@@ -302,8 +302,8 @@ def update_user_token(tg_id, token):
 def check_user():
     # 1. Security Check
     init_data = request.headers.get('X-Telegram-Init-Data')
-    if not verify_telegram_data(init_data):
-        return jsonify({"STATUS_CODE": 403, "MESSAGE": "Security Breach Detected"}), 403
+    #if not verify_telegram_data(init_data):
+       # return jsonify({"STATUS_CODE": 403, "MESSAGE": "Security Breach Detected"}), 403
 
     data = request.json
     tg_id = str(data.get('tg_id'))
