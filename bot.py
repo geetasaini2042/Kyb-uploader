@@ -20,7 +20,16 @@ from pyrogram import Client, filters, enums
 from pyrogram.errors import FloodWait, MessageNotModified
 import yt_dlp
 from dotenv import load_dotenv
-
+import os
+import json
+import hmac
+import hashlib
+import urllib.parse
+import time
+import jwt
+import datetime
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 # --- LOAD ENVIRONMENT VARIABLES ---
 load_dotenv()
 
@@ -159,23 +168,15 @@ def create_session():
 
 # --- FLASK ---
 web_app = Flask(__name__)
+CORS(web_app)
 @web_app.route('/')
-app = web_app
-
 def home(): return f"{BOT_ALIAS} Running", 200
-import os
-import json
-import hmac
-import hashlib
-import urllib.parse
-import time
-import jwt
-import datetime
-from flask import Flask, request, jsonify
-from flask_cors import CORS
 
-app = Flask(__name__)
-CORS(app)  # Allow Frontend to connect
+
+
+
+#app = web_app
+#CORS(app)  # Allow Frontend to connect
 
 # ==========================================
 # ⚙️ CONFIGURATION
@@ -274,7 +275,7 @@ def update_user_token(tg_id, token):
 # ==========================================
 
 # --- 1. CHECK USER (LOGIN) ---
-@app.route('/api/user/check', methods=['POST'])
+@web_app.route('/api/user/check', methods=['POST'])
 def check_user():
     # 1. Security Check
     init_data = request.headers.get('X-Telegram-Init-Data')
@@ -313,7 +314,7 @@ def check_user():
 # --- 2. REGISTER USER ---
 # app.py - register_user function update karein
 
-@app.route('/api/user/register', methods=['POST'])
+@web_app.route('/api/user/register', methods=['POST'])
 def register_user():
     # 1. Security Check
     init_data = request.headers.get('X-Telegram-Init-Data')
@@ -370,7 +371,7 @@ def register_user():
         }
     })
 
-@app.route('/api/user/update/detail', methods=['POST'])
+@web_app.route('/api/user/update/detail', methods=['POST'])
 def update_user_detail():
     # 1. Check Auth Token
     auth_header = request.headers.get('Authorization')
@@ -412,7 +413,7 @@ def update_user_detail():
     else:
         return jsonify({"STATUS_CODE": 404, "MESSAGE": "User Not Found"}), 404
 
-@app.route('/api/profile/update-photo', methods=['POST'])
+@web_app.route('/api/profile/update-photo', methods=['POST'])
 def update_photo():
     # Token Check...
     if 'photo' not in request.files:
@@ -429,7 +430,7 @@ def update_photo():
     })
 
 # --- 3. HEARTBEAT (10 Second Check) ---
-@app.route('/api/user/validate-token', methods=['POST'])
+@web_app.route('/api/user/validate-token', methods=['POST'])
 def validate_token():
     # Isme hum 'initData' check nahi karenge kyunki ye background call hai
     # Hum sirf 'Authorization: Bearer <token>' check karenge
@@ -459,7 +460,7 @@ def validate_token():
 
 
 # --- 4. MOCK API: COLLEGES ---
-@app.route('/api/colleges/<uni_id>', methods=['GET'])
+@web_app.route('/api/colleges/<uni_id>', methods=['GET'])
 def get_colleges(uni_id):
     # Security header yahan optional hai, par laga sakte hain
     
@@ -478,7 +479,7 @@ def get_colleges(uni_id):
     })
 
 # --- 5. MOCK API: COURSES ---
-@app.route('/courses/<uni_id>', methods=['GET'])
+@web_app.route('/courses/<uni_id>', methods=['GET'])
 def get_courses(uni_id):
     courses = [
         {"courseId": 34, "courseData": {"courseName": "Bachelor of Science (Maths)", "courseShortName": "B.Sc (Maths)"}},
@@ -492,10 +493,6 @@ def get_courses(uni_id):
         "MESSAGE": "Success",
         "RESPONSE": courses
     })
-
-if __name__ == '__main__':
-    # Localhost run
-    app.run(host='0.0.0.0', port=5000, debug=True)
 
 def start_keep_alive():
     port = int(os.environ.get("PORT", 8080))
