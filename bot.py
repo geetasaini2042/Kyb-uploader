@@ -160,7 +160,342 @@ def create_session():
 # --- FLASK ---
 web_app = Flask(__name__)
 @web_app.route('/')
+app = web_app
+
 def home(): return f"{BOT_ALIAS} Running", 200
+import os
+import json
+import hmac
+import hashlib
+import urllib.parse
+import time
+import jwt
+import datetime
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+
+app = Flask(__name__)
+CORS(app)  # Allow Frontend to connect
+
+# ==========================================
+# ⚙️ CONFIGURATION
+# ==========================================
+# Apna Asli Telegram Bot Token Yahan Dalein
+
+# JWT Secret Key (Kuch bhi random string rakhein secure hone ke liye)
+JWT_SECRET = "Security1233333"
+
+# Database File (Simple JSON for storage)
+DB_FILE = "/storage/emulated/0/TGBOT/users_db.json"
+
+# ==========================================
+# 🔐 SECURITY FUNCTIONS
+# ==========================================
+
+def verify_telegram_data(init_data):
+    """
+    Check if the request is legitimately from Telegram.
+    Validates HMAC-SHA256 signature.
+    """
+    if not init_data:
+        return False
+    
+    try:
+        # Parse query string
+        parsed_data = dict(urllib.parse.parse_qsl(init_data))
+        received_hash = parsed_data.pop('hash', None)
+        
+        if not received_hash:
+            return False
+
+        # Sort keys alphabetically to recreate data-check-string
+        data_check_arr = []
+        for key, value in sorted(parsed_data.items()):
+            data_check_arr.append(f"{key}={value}")
+        data_check_string = "\n".join(data_check_arr)
+
+        # HMAC Calculation
+        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
+        calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+
+        # Compare hashes
+        if calculated_hash != received_hash:
+            return False
+            
+        # Optional: Check if data is too old (e.g., > 24 hours)
+        auth_date = int(parsed_data.get('auth_date', 0))
+        if time.time() - auth_date > 86400:
+            return False
+
+        return True
+
+    except Exception as e:
+        print(f"Auth Error: {e}")
+        return False
+
+def generate_jwt(tg_id):
+    """Generates a secure token valid for 7 days"""
+    payload = {
+        'tg_id': tg_id,
+        'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7),
+        'iat': datetime.datetime.utcnow()
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm='HS256')
+
+# ==========================================
+# 🗄️ DATABASE HELPERS
+# ==========================================
+
+def load_db():
+    if not os.path.exists(DB_FILE):
+        return {}
+    try:
+        with open(DB_FILE, 'r') as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_db(data):
+    with open(DB_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
+
+def get_user(tg_id):
+    db = load_db()
+    return db.get(str(tg_id))
+
+def update_user_token(tg_id, token):
+    db = load_db()
+    if str(tg_id) in db:
+        db[str(tg_id)]['active_token'] = token
+        save_db(db)
+
+# ==========================================
+# 🚀 API ENDPOINTS
+# ==========================================
+
+# --- 1. CHECK USER (LOGIN) ---
+@app.route('/api/user/check', methods=['POST'])
+def check_user():
+    # 1. Security Check
+    init_data = request.headers.get('X-Telegram-Init-Data')
+    if not verify_telegram_data(init_data):
+        return jsonify({"STATUS_CODE": 403, "MESSAGE": "Security Breach Detected"}), 403
+
+    data = request.json
+    tg_id = str(data.get('tg_id'))
+    
+    user = get_user(tg_id)
+
+    if user:
+        # User Found -> Generate NEW Token (Invalidates old sessions)
+        new_token = generate_jwt(tg_id)
+        update_user_token(tg_id, new_token)
+        
+        return jsonify({
+            "STATUS_CODE": 200,
+            "MESSAGE": "Success",
+            "RESPONSE": {
+                "is_registered": True,
+                "user_data": user,
+                "token": new_token
+            }
+        })
+    else:
+        # User Not Found -> Frontend should show Signup
+        return jsonify({
+            "STATUS_CODE": 200,
+            "MESSAGE": "User Not Found",
+            "RESPONSE": {
+                "is_registered": False
+            }
+        })
+
+# --- 2. REGISTER USER ---
+# app.py - register_user function update karein
+
+@app.route('/api/user/register', methods=['POST'])
+def register_user():
+    # 1. Security Check
+    init_data = request.headers.get('X-Telegram-Init-Data')
+    if not verify_telegram_data(init_data):
+        return jsonify({"STATUS_CODE": 403, "MESSAGE": "Security Breach Detected"}), 403
+
+    data = request.json
+    tg_id = str(data.get('tg_id'))
+
+    # 2. Validation
+    if not tg_id or not data.get('mobile') or not data.get('universityId'):
+        return jsonify({"STATUS_CODE": 400, "MESSAGE": "Incomplete Data"}), 400
+
+    # 3. Generate Token
+    token = generate_jwt(tg_id)
+    
+    # 4. Prepare Data (🔥 YAHAN GALTI THI - AB FIX HAI)
+    user_record = {
+        "tg_id": tg_id,
+        "name": data.get('name'),
+        "username": data.get('username'),
+        "photo": data.get('photo'),
+        
+        # IDs (Backend Logic ke liye)
+        "universityId": data.get('universityId'),
+        "collegeCode": data.get('collegeCode'),
+        "courseId": data.get('courseId'),
+
+        # 🔥 NAMES (Profile Display ke liye - YE ADD KIYA HAI)
+        "universityName": data.get('universityName'),
+        "collegeName": data.get('collegeName'),
+        "courseName": data.get('courseName'),
+
+        "mobile": data.get('mobile'),
+        "email": data.get('email'),
+        "bio": "Student at USG", # Default Bio
+        "address": "India",      # Default Address
+        "dob": "2000-01-01",     # Default DOB
+        "active_token": token,
+        "joined_at": str(datetime.datetime.now())
+    }
+
+    # 5. Save to DB
+    db = load_db()
+    db[tg_id] = user_record
+    save_db(db)
+
+    return jsonify({
+        "STATUS_CODE": 200,
+        "MESSAGE": "Registration Successful",
+        "RESPONSE": {
+            "user_data": user_record,
+            "token": token
+        }
+    })
+
+@app.route('/api/user/update/detail', methods=['POST'])
+def update_user_detail():
+    # 1. Check Auth Token
+    auth_header = request.headers.get('Authorization')
+    if not auth_header: 
+        return jsonify({"STATUS_CODE": 401, "MESSAGE": "Missing Token"}), 401
+    
+    # 2. Extract Data
+    data = request.json
+    field = data.get('field')
+    value = data.get('value')
+    
+    # Frontend se X-User-ID header aa raha hai (Secure Headers se)
+    tg_id = request.headers.get('X-User-ID') 
+
+    # 3. Validation: Sirf ye fields allow karein
+    ALLOWED_FIELDS = ['name', 'bio', 'address', 'dob']
+    
+    if field not in ALLOWED_FIELDS:
+        return jsonify({"STATUS_CODE": 403, "MESSAGE": f"Editing {field} is not allowed"}), 403
+
+    # --- 🔥 MAIN FIX HERE (DATABASE HANDLING) ---
+    
+    # A. Poora Database Load karein
+    db = load_db()
+    
+    # B. Check karein user exist karta hai ya nahi
+    if str(tg_id) in db:
+        # C. Sirf us user ka specific field update karein
+        db[str(tg_id)][field] = value
+        
+        # D. Wapas POORA DB save karein (Sirf user nahi)
+        save_db(db)
+        
+        return jsonify({
+            "STATUS_CODE": 200, 
+            "MESSAGE": "Updated Successfully",
+            "RESPONSE": { field: value }
+        })
+    else:
+        return jsonify({"STATUS_CODE": 404, "MESSAGE": "User Not Found"}), 404
+
+@app.route('/api/profile/update-photo', methods=['POST'])
+def update_photo():
+    # Token Check...
+    if 'photo' not in request.files:
+        return jsonify({"STATUS_CODE": 400}), 400
+        
+    file = request.files['photo']
+    # File save logic (e.g., upload to Cloudinary or Save to Disk)
+    # For now, return a fake new URL
+    new_url = f"https://sainipankaj12.serv00.net/uploads/{file.filename}"
+    
+    return jsonify({
+        "STATUS_CODE": 200, 
+        "RESPONSE": { "photo_url": new_url }
+    })
+
+# --- 3. HEARTBEAT (10 Second Check) ---
+@app.route('/api/user/validate-token', methods=['POST'])
+def validate_token():
+    # Isme hum 'initData' check nahi karenge kyunki ye background call hai
+    # Hum sirf 'Authorization: Bearer <token>' check karenge
+    
+    auth_header = request.headers.get('Authorization')
+    tg_id_header = request.headers.get('X-User-ID') # Frontend should send this
+    
+    if not auth_header or not tg_id_header:
+        return jsonify({"isValid": False, "reason": "Missing Headers"}), 401
+
+    try:
+        token = auth_header.split(" ")[1]
+        
+        # 1. Decode JWT to check expiry
+        decoded = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+        
+        # 2. Check if Token matches DB (Single Device Check)
+        user = get_user(tg_id_header)
+        
+        if user and user.get('active_token') == token:
+            return jsonify({"isValid": True})
+        else:
+            return jsonify({"isValid": False, "reason": "Logged in another device"}), 401
+            
+    except Exception as e:
+        return jsonify({"isValid": False, "reason": "Invalid Token"}), 401
+
+
+# --- 4. MOCK API: COLLEGES ---
+@app.route('/api/colleges/<uni_id>', methods=['GET'])
+def get_colleges(uni_id):
+    # Security header yahan optional hai, par laga sakte hain
+    
+    # Mock Response
+    colleges = [
+        {"collegeName": "Maharaja College, Jaipur", "collegeCode": "421", "status": True},
+        {"collegeName": "Maharani College, Jaipur", "collegeCode": "419", "status": True},
+        {"collegeName": "Commerce College, Jaipur", "collegeCode": "425", "status": True},
+        {"collegeName": "Subodh PG College", "collegeCode": "SUB01", "status": True}
+    ]
+    
+    return jsonify({
+        "STATUS_CODE": 200,
+        "MESSAGE": "Success",
+        "RESPONSE": colleges
+    })
+
+# --- 5. MOCK API: COURSES ---
+@app.route('/courses/<uni_id>', methods=['GET'])
+def get_courses(uni_id):
+    courses = [
+        {"courseId": 34, "courseData": {"courseName": "Bachelor of Science (Maths)", "courseShortName": "B.Sc (Maths)"}},
+        {"courseId": 35, "courseData": {"courseName": "Bachelor of Science (Bio)", "courseShortName": "B.Sc (Bio)"}},
+        {"courseId": 36, "courseData": {"courseName": "Bachelor of Arts", "courseShortName": "B.A"}},
+        {"courseId": 37, "courseData": {"courseName": "Bachelor of Commerce", "courseShortName": "B.Com"}}
+    ]
+    
+    return jsonify({
+        "STATUS_CODE": 200,
+        "MESSAGE": "Success",
+        "RESPONSE": courses
+    })
+
+if __name__ == '__main__':
+    # Localhost run
+    app.run(host='0.0.0.0', port=5000, debug=True)
 
 def start_keep_alive():
     port = int(os.environ.get("PORT", 8080))
