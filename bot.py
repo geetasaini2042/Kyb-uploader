@@ -186,7 +186,7 @@ CORS(app)  # Allow Frontend to connect
 JWT_SECRET = "Security1233333"
 
 # Database File (Simple JSON for storage)
-DB_FILE = "/storage/emulated/0/TGBOT/users_db.json"
+DB_FILE = os.path.join(SCRIPT_DIR, "users_db.json")
 
 # ==========================================
 # 🔐 SECURITY FUNCTIONS
