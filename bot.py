@@ -193,45 +193,67 @@ DB_FILE = os.path.join(SCRIPT_DIR, "users_db.json")
 # 🔐 SECURITY FUNCTIONS
 # ==========================================
 
-def verify_telegram_data(init_data):
+import hmac
+import hashlib
+import urllib.parse
+import time
+import json
+
+def verify_telegram_data(init_data, bot_token):
     """
-    Check if the request is legitimately from Telegram.
-    Validates HMAC-SHA256 signature.
+    Validates Telegram Web App data.
+    Input:
+        init_data: The raw query string from window.Telegram.WebApp.initData
+        bot_token: Your Telegram Bot Token
     """
     if not init_data:
+        print("Error: init_data is empty")
         return False
     
     try:
-        # Parse query string
-        parsed_data = dict(urllib.parse.parse_qsl(init_data))
-        received_hash = parsed_data.pop('hash', None)
+        # 1. Parse query string (IMPORTANT: keep_blank_values=True)
+        # Telegram string format ko exact match krne ke liye blank values maintain krna zaruri hai
+        parsed_data = dict(urllib.parse.parse_qsl(init_data, keep_blank_values=True, strict_parsing=False))
         
+        # 2. Hash nikaalo aur remove karo
+        received_hash = parsed_data.pop('hash', None)
         if not received_hash:
+            print("Error: Hash missing from init_data")
             return False
 
-        # Sort keys alphabetically to recreate data-check-string
+        # 3. Data-Check-String banana (Alphabetical Order)
+        # Key=Value format mein join karna hai
         data_check_arr = []
         for key, value in sorted(parsed_data.items()):
             data_check_arr.append(f"{key}={value}")
+        
         data_check_string = "\n".join(data_check_arr)
 
-        # HMAC Calculation
-        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
+        # 4. HMAC Calculation (Standard Telegram Method)
+        # Step A: Create Secret Key using "WebAppData"
+        secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+        
+        # Step B: Calculate Hash using the Secret Key and Data Check String
         calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
 
-        # Compare hashes
+        # Debugging: Agar mismatch hai to print karo
         if calculated_hash != received_hash:
+            print(f"Validation Failed!")
+            print(f"Received Hash:   {received_hash}")
+            print(f"Calculated Hash: {calculated_hash}")
+            print(f"Check String used: {data_check_string}") # Isko check karo ki ye wahi hai jo frontend bhej raha hai
             return False
             
-        # Optional: Check if data is too old (e.g., > 24 hours)
+        # 5. Auth Date Check (Optional but Recommended)
         auth_date = int(parsed_data.get('auth_date', 0))
-        if time.time() - auth_date > 86400:
-            return False
+        if time.time() - auth_date > 86400: # 24 hours
+             print("Error: Data is outdated")
+             return False
 
         return True
 
     except Exception as e:
-        print(f"Auth Error: {e}")
+        print(f"Auth Exception: {e}")
         return False
 
 def generate_jwt(tg_id):
